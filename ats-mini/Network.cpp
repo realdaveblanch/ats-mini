@@ -47,6 +47,7 @@ static bool wifiConnect();
 static void webInit();
 
 static void webSetConfig(AsyncWebServerRequest *request);
+static void webSetControl(AsyncWebServerRequest *request);
 
 static const String webInputField(const String &name, const String &value, bool pass = false);
 static const String webStyleSheet();
@@ -170,6 +171,9 @@ void netInit(uint8_t netMode, bool showStatus)
     clockReset();
     for(int j=0 ; j<10 ; j++)
       if(ntpSyncTime()) break; else delay(500);
+      
+    // Fetch Solar/DX Data once
+    updatePropagationData();
   }
 
   // If only connected to sync...
@@ -322,8 +326,38 @@ static void webInit()
   // This method saves configuration form contents
   server.on("/setconfig", HTTP_ANY, webSetConfig);
 
+  // API Control
+  server.on("/api/control", HTTP_ANY, webSetControl);
+
   // Start web server
   server.begin();
+}
+
+void webSetControl(AsyncWebServerRequest *request)
+{
+  if(request->hasParam("freq"))
+  {
+    String freq = request->getParam("freq")->value();
+    if (currentMode == FM)
+        updateFrequency(freq.toFloat() * 100);
+    else
+        updateFrequency(freq.toInt());
+  }
+
+  if(request->hasParam("vol"))
+  {
+    String vol = request->getParam("vol")->value();
+    volume = constrain(vol.toInt(), 0, 63);
+    rx.setVolume(volume);
+  }
+  
+  if(request->hasParam("band"))
+  {
+    String val = request->getParam("band")->value();
+    selectBand(val.toInt());
+  }
+
+  request->redirect("/");
 }
 
 void webSetConfig(AsyncWebServerRequest *request)
@@ -576,6 +610,26 @@ static const String webRadioPage()
   "<TD>" + String(batteryMonitor()) + "V</TD>"
 "</TR>"
 "</TABLE>"
+"<H2 ALIGN='CENTER'>Remote Control</H2>"
+"<FORM ACTION='/api/control' METHOD='GET'>"
+"<TABLE COLUMNS=2>"
+"<TR>"
+  "<TD CLASS='LABEL'>Frequency " + String(currentMode==FM ? "(MHz)" : "(kHz)") + "</TD>"
+  "<TD><INPUT TYPE='TEXT' NAME='freq' VALUE='" + String(currentMode==FM ? (float)currentFrequency/100.0 : currentFrequency) + "'></TD>"
+"</TR>"
+"<TR>"
+  "<TD CLASS='LABEL'>Volume (0-63)</TD>"
+  "<TD><INPUT TYPE='TEXT' NAME='vol' VALUE='" + String(volume) + "'></TD>"
+"</TR>"
+"<TR>"
+  "<TD CLASS='LABEL'>Band Index</TD>"
+  "<TD><INPUT TYPE='TEXT' NAME='band' VALUE='" + String(bandIdx) + "'></TD>"
+"</TR>"
+"<TR><TH COLSPAN=2 CLASS='HEADING'>"
+    "<INPUT TYPE='SUBMIT' VALUE='Update'>"
+"</TH></TR>"
+"</TABLE>"
+"</FORM>"
 );
 }
 

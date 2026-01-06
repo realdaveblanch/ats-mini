@@ -29,6 +29,7 @@ bool muteOn(uint8_t mode, int x = 2);
 const char *clockGet();
 bool clockAvailable();
 bool clockGetHM(uint8_t *hours, uint8_t *minutes);
+bool clockGetHMS(uint8_t *hours, uint8_t *minutes, uint8_t *seconds);
 bool clockSet(uint8_t hours, uint8_t minutes, uint8_t seconds = 0);
 void clockReset();
 bool clockTickTime();
@@ -44,5 +45,16 @@ uint32_t freqToHz(uint16_t freq, uint8_t mode);
 
 // Check if given frequency belongs to a band
 bool isFreqInBand(const Band *band, uint16_t freq);
+
+// Utility Channels
+struct UtilFreq {
+    uint32_t freq;    // Hz
+    uint8_t mode;     // AM, USB, LSB
+    const char* name; // Station Name
+    const char* cat;  // Category
+};
+
+int getUtilFreqCount();
+const UtilFreq* getUtilData(int idx);
 
 #endif // UTILS_H

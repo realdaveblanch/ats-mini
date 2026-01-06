@@ -13,7 +13,9 @@
 #include "Utils.h"
 #include "EIBI.h"
 #include "Remote.h"
-#include "Ble.h"
+//#include "Ble.h"
+
+#include "Beacons.h"
 
 // SI473/5 and UI
 #define MIN_ELAPSED_TIME         5  // 300
@@ -103,7 +105,7 @@ ButtonTracker pb1 = ButtonTracker();
 TFT_eSPI tft    = TFT_eSPI();
 TFT_eSprite spr = TFT_eSprite(&tft);
 SI4735_fixed rx;
-NordicUART BLESerial = NordicUART(RECEIVER_NAME);
+//NordicUART BLESerial = NordicUART(RECEIVER_NAME);
 
 //
 // Hardware initialization and setup
@@ -269,7 +271,7 @@ void setup()
   netInit(wifiModeIdx);
 
   // Start Bluetooth LE, if necessary
-  bleInit(bleModeIdx);
+  //bleInit(bleModeIdx);
 }
 
 
@@ -312,7 +314,7 @@ int16_t accelerateEncoder(int8_t dir)
 // will reboot during attachInterrupt call. The ICACHE_RAM_ATTR macro
 // places this function into RAM.
 //
-ICACHE_RAM_ATTR void rotaryEncoder()
+void rotaryEncoder()
 {
   // Rotary encoder events
   uint8_t encoderStatus = encoder.process();
@@ -755,7 +757,7 @@ void loop()
 
   // Periodically print status to remote interfaces
   serialTickTime(&Serial, &remoteSerialState, usbModeIdx);
-  remoteBLETickTime(&BLESerial, &remoteBLEState, bleModeIdx);
+  //remoteBLETickTime(&BLESerial, &remoteBLEState, bleModeIdx);
 
   // if(encCount && getCpuFrequencyMhz()!=240) setCpuFrequencyMhz(240);
 
@@ -769,6 +771,7 @@ void loop()
   if(ser_event & REMOTE_PREFS) prefsRequestSave(SAVE_ALL);
 
   // Receive and execute BLE command
+  /*
   int ble_event = bleDoCommand(&BLESerial, &remoteBLEState, bleModeIdx);
   needRedraw |= !!(ble_event & REMOTE_CHANGED);
   pb1st.wasClicked |= !!(ble_event & REMOTE_CLICK);
@@ -776,6 +779,7 @@ void loop()
   encCount = ble_direction? ble_direction : encCount;
   encCountAccel = ble_direction? ble_direction : encCountAccel;
   if(ble_event & REMOTE_PREFS) prefsRequestSave(SAVE_ALL);
+  */
 
   // Block encoder rotation when in the locked sleep mode
   if(encCount && sleepOn() && sleepModeIdx==SLEEP_LOCKED) encCount = encCountAccel = 0;
@@ -976,9 +980,13 @@ void loop()
 
   // Tick NETWORK time, connecting to WiFi if requested
   netTickTime();
-
+  
   // Run clock
   needRedraw |= clockTickTime();
+  
+  // Run beacon logic
+  beaconRun();
+  if (isBeaconMode()) needRedraw = true; // Force redraw to show beacon updates
 
   // Periodically refresh the main screen
   // This covers the case where there is nothing else triggering a refresh

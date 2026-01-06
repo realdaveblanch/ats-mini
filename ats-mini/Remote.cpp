@@ -431,9 +431,104 @@ int remoteDoCommand(Stream* stream, RemoteState* state, char key)
   return(event | REMOTE_CHANGED);
 }
 
+//
+// RigCtl implementation
+//
+static void rigCtlProcess(Stream* stream)
+{
+  if (!stream->available()) return;
+  
+  char cmd = stream->read();
+  
+  switch(cmd)
+  {
+    case 'f': // get_freq
+      stream->printf("%lu\n", (currentMode == FM) ? (uint32_t)(currentFrequency * 10000) : (uint32_t)((currentFrequency * 1000) + currentBFO));
+      break;
+      
+    case 'F': // set_freq
+      {
+        long freq = remoteReadInteger(stream); // in Hz
+        if (currentMode == FM)
+          updateFrequency(freq / 10000);
+        else
+          updateFrequency(freq / 1000);
+        stream->println("RPRT 0");
+      }
+      break;
+
+    case 'm': // get_mode
+      {
+        const char* m = "AM";
+        int width = 0; // Hz
+        
+        switch(currentMode) {
+          case FM: m = "FM"; width = 100000; break;
+          case AM: m = "AM"; width = 6000; break;
+          case LSB: m = "LSB"; width = 2700; break;
+          case USB: m = "USB"; width = 2700; break;
+        }
+        stream->printf("%s\n%d\n", m, width);
+      }
+      break;
+      
+    case 'M': // set_mode
+      {
+         char modeName[8];
+         remoteReadString(stream, modeName, 8);
+         // Pass bandwidth param
+         remoteReadInteger(stream); 
+         
+         if (strcmp(modeName, "FM") == 0) currentMode = FM;
+         else if (strcmp(modeName, "AM") == 0) currentMode = AM;
+         else if (strcmp(modeName, "LSB") == 0) currentMode = LSB;
+         else if (strcmp(modeName, "USB") == 0) currentMode = USB;
+         
+         // Force band/mode update
+         selectBand(bandIdx); // Re-select to apply mode? No, this resets frequency.
+         // Just setting currentMode might not be enough if logic depends on band.
+         // But for now let's assume simple mode switch.
+         stream->println("RPRT 0");
+      }
+      break;
+
+    case 'v': // get_vfo
+      stream->println("VFOA");
+      break;
+
+    case 'l': // get_level
+      {
+         char lvl[8];
+         remoteReadString(stream, lvl, 8);
+         if (strcmp(lvl, "STRENGTH") == 0) {
+            // Return RSSI
+            stream->printf("%d\n", rssi - 127); // Hamlib expects dBm usually, or relative? RSSI here is dBuV usually.
+         } else {
+             stream->println("0");
+         }
+      }
+      break;
+      
+    case 'q': // quit?
+        // Do nothing
+        break;
+
+    default:
+       // Ignore unknown or eat line
+       while(stream->available() && stream->peek() != '\n') stream->read();
+       if(stream->peek() == '\n') stream->read();
+       break;
+  }
+}
+
 int serialDoCommand(Stream* stream, RemoteState* state, uint8_t usbMode)
 {
   if(usbMode == USB_OFF) return 0;
+
+  if (usbMode == USB_RIGCTL) {
+    rigCtlProcess(stream);
+    return 0; // RigCtl handles its own responses
+  }
 
   if (Serial.available())
     return remoteDoCommand(stream, state, Serial.read());

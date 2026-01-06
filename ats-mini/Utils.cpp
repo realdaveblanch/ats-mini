@@ -291,6 +291,18 @@ bool clockGetHM(uint8_t *hours, uint8_t *minutes)
   }
 }
 
+bool clockGetHMS(uint8_t *hours, uint8_t *minutes, uint8_t *seconds)
+{
+  if(!clockHasBeenSet) return(false);
+  else
+  {
+    *hours   = clockHours;
+    *minutes = clockMinutes;
+    *seconds = clockSeconds;
+    return(true);
+  }
+}
+
 void clockReset()
 {
   clockHasBeenSet = false;
@@ -455,4 +467,81 @@ int getStrength(int rssi)
     if (rssi <= 76) return 16; // S9 +60
     return                 17; //>S9 +60
   }
+}
+
+//
+// Utility Frequencies with Modes and Categories
+//
+static const UtilFreq utilFreqs[] = {
+    // --- TIME SIGNALS ---
+    { 2500000, AM, "WWV/BPM Time", "TIME SIGNALS" },
+    { 3330000, AM, "CHU Canada",   "TIME SIGNALS" },
+    { 4996000, AM, "RWM Russia",   "TIME SIGNALS" },
+    { 5000000, AM, "WWV/WWVH",     "TIME SIGNALS" },
+    { 7850000, AM, "CHU Canada",   "TIME SIGNALS" },
+    { 10000000, AM, "WWV/WWVH",    "TIME SIGNALS" },
+    { 14670000, AM, "CHU Canada",  "TIME SIGNALS" },
+    { 15000000, AM, "WWV/WWVH",    "TIME SIGNALS" },
+
+    // --- MARITIME GMDSS ---
+    { 2182000, USB, "Distress 2m",  "MARITIME (GMDSS)" },
+    { 2187500, USB, "GMDSS DSC",    "MARITIME (GMDSS)" },
+    { 4125000, USB, "Distress 4m",  "MARITIME (GMDSS)" },
+    { 4207500, USB, "GMDSS DSC",    "MARITIME (GMDSS)" },
+    { 6215000, USB, "Distress 6m",  "MARITIME (GMDSS)" },
+    { 6312000, USB, "GMDSS DSC",    "MARITIME (GMDSS)" },
+    { 8291000, USB, "Distress 8m",  "MARITIME (GMDSS)" },
+    { 8414500, USB, "GMDSS DSC",    "MARITIME (GMDSS)" },
+    { 12290000, USB, "Distress 12m", "MARITIME (GMDSS)" },
+    { 12577000, USB, "GMDSS DSC",    "MARITIME (GMDSS)" },
+    { 16420000, USB, "Distress 16m", "MARITIME (GMDSS)" },
+    { 16804500, USB, "GMDSS DSC",    "MARITIME (GMDSS)" },
+
+    // --- AERO / VOLMET ---
+    { 2869000, USB, "Gander Aero",   "AERO / VOLMET" },
+    { 2962000, USB, "Shanwick Aero", "AERO / VOLMET" },
+    { 3413000, USB, "Shannon Volmet","AERO / VOLMET" },
+    { 4675000, USB, "Shanwick Aero", "AERO / VOLMET" },
+    { 5450000, USB, "RAF Volmet",    "AERO / VOLMET" },
+    { 5505000, USB, "Shannon Volmet","AERO / VOLMET" },
+    { 6604000, USB, "Gander Aero",   "AERO / VOLMET" },
+    { 6676000, USB, "Bangkok Volmet","AERO / VOLMET" },
+    { 8864000, USB, "Shanwick Aero", "AERO / VOLMET" },
+    { 8957000, USB, "Shannon Volmet","AERO / VOLMET" },
+    { 10051000, USB, "Gander Aero",  "AERO / VOLMET" },
+    { 11253000, USB, "RAF Volmet",   "AERO / VOLMET" },
+    { 13264000, USB, "Shannon Volmet","AERO / VOLMET" },
+
+    // --- MILITARY / MYSTERY ---
+    { 4625000, USB, "The Buzzer",    "MILITARY / MYSTERY" }, // UVB-76
+    { 4724000, USB, "USAF HFGCS",    "MILITARY / MYSTERY" },
+    { 6761000, USB, "USAF HFGCS",    "MILITARY / MYSTERY" },
+    { 8992000, USB, "USAF HFGCS",    "MILITARY / MYSTERY" },
+    { 11175000, USB, "USAF HFGCS",   "MILITARY / MYSTERY" },
+    { 13200000, USB, "USAF HFGCS",   "MILITARY / MYSTERY" },
+    { 15016000, USB, "USAF HFGCS",   "MILITARY / MYSTERY" },
+
+    // --- DIGITAL MODES ---
+    { 3573000, USB, "FT8 80m",       "DIGITAL / HAM" },
+    { 7074000, USB, "FT8 40m",       "DIGITAL / HAM" },
+    { 10136000, USB, "FT8 30m",      "DIGITAL / HAM" },
+    { 14074000, USB, "FT8 20m",      "DIGITAL / HAM" },
+    { 14230000, USB, "SSTV Call",    "DIGITAL / HAM" },
+    { 18100000, USB, "FT8 17m",      "DIGITAL / HAM" },
+    { 21074000, USB, "FT8 15m",      "DIGITAL / HAM" },
+    { 28074000, USB, "FT8 10m",      "DIGITAL / HAM" },
+    
+    // --- SPECIAL ---
+    { 3340000, AM, "HAARP Monitor",  "SPECIAL / SCIENTIFIC" },
+    { 6998000, AM, "HAARP Monitor",  "SPECIAL / SCIENTIFIC" },
+    { 27025000, AM, "CB Ch 6 (Super)","SPECIAL / SCIENTIFIC" },
+};
+
+int getUtilFreqCount() {
+    return sizeof(utilFreqs) / sizeof(utilFreqs[0]);
+}
+
+const UtilFreq* getUtilData(int idx) {
+    if (idx < 0 || idx >= getUtilFreqCount()) return &utilFreqs[0];
+    return &utilFreqs[idx];
 }

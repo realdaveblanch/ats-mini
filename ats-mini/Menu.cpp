@@ -4,8 +4,9 @@
 #include "Utils.h"
 #include "Draw.h"
 #include "EIBI.h"
-#include "Ble.h"
+//#include "Ble.h"
 #include "Menu.h"
+#include "Beacons.h"
 
 //
 // Bands Menu
@@ -64,6 +65,8 @@ Band bands[] =
   // https://www.hfunderground.com/wiki/CB
   // Also see MIN_CB_FREQUENCY and MAX_CB_FREQUENCY
   {"CB",   SW_BAND_TYPE, AM,  25000, 28000, 27135, 0, 4, 0, 0},
+  // Experimental wideband (150kHz - 30MHz continuous)
+  {"WIDE", SW_BAND_TYPE, AM,    150, 30000, 10000, 1, 4, 0, 0},
 };
 
 int getTotalBands() { return(ITEM_COUNT(bands)); }
@@ -85,9 +88,13 @@ Band *getCurrentBand() { return(&bands[bandIdx]); }
 #define MENU_AGC_ATT      9
 #define MENU_AVC         10
 #define MENU_SOFTMUTE    11
-#define MENU_SETTINGS    12
+#define MENU_BEACON      12
+#define MENU_PROPAG      13
+#define MENU_UTILITY     14
+#define MENU_SETTINGS    15
 
 int8_t menuIdx = MENU_VOLUME;
+int utilIdx = 0; // Current Utility Index
 
 static const char *menu[] =
 {
@@ -103,6 +110,9 @@ static const char *menu[] =
   "AGC/ATTN",
   "AVC",
   "SoftMute",
+  "Beacon",
+  "Propag.",
+  "Utility DB",
   "Settings",
 };
 
@@ -265,7 +275,7 @@ int getTotalUTCOffsets() { return(ITEM_COUNT(utcOffsets)); }
 //
 uint8_t uiLayoutIdx = 0;
 static const char *uiLayoutDesc[] =
-{ "Default", "S-Meter" };
+{ "Default", "S-Meter", "S-History" };
 
 //
 // USB Port Mode Menu
@@ -273,7 +283,7 @@ static const char *uiLayoutDesc[] =
 
 uint8_t usbModeIdx = USB_OFF;
 static const char *usbModeDesc[] =
-{ "Off", "Ad hoc" };
+{ "Off", "Ad hoc", "RigCtl" };
 
 int getTotalUSBModes() { return(ITEM_COUNT(usbModeDesc)); }
 
@@ -624,9 +634,11 @@ static void doUSBMode(int16_t enc)
 
 static void doBleMode(int16_t enc)
 {
+  /*
   uint8_t newBleModeIdx = wrap_range(bleModeIdx, enc, 0, LAST_ITEM(bleModeDesc));
   bleInit(newBleModeIdx);
   bleModeIdx = newBleModeIdx;
+  */
 }
 
 static void doWiFiMode(int16_t enc)
@@ -660,6 +672,42 @@ static void doZoom(int16_t enc)
 static void doScrollDir(int16_t enc)
 {
   scrollDirection = (scrollDirection == 1) ? -1 : 1;
+}
+
+static void doUtility(int16_t enc)
+{
+  utilIdx += enc;
+  if (utilIdx < 0) utilIdx = getUtilFreqCount() - 1;
+  if (utilIdx >= getUtilFreqCount()) utilIdx = 0;
+  
+  const UtilFreq* u = getUtilData(utilIdx);
+  
+  // Tune logic
+  // Check if we need to change Band/Mode first
+  if (currentMode != u->mode) {
+      currentMode = u->mode;
+      // We need to re-apply band settings for this mode
+      // This is tricky without disrupting the user's band choice too much.
+      // We force the SI4735 to the new mode.
+      
+      if (currentMode == AM) {
+          rx.setAM(150, 30000, u->freq/1000, getCurrentStep()->step);
+      } else {
+          // SSB
+          rx.setSSB(150, 30000, u->freq/1000, 1, currentMode);
+          rx.setSSBAudioBandwidth(getCurrentBandwidth()->idx);
+          rx.setSSBSidebandCutoffFilter(0);
+          rx.setSSBAutomaticVolumeControl(1);
+      }
+  }
+  
+  // Set Frequency
+  if (currentMode == AM) {
+      updateFrequency(u->freq / 1000);
+  } else {
+      updateFrequency(u->freq / 1000);
+      updateBFO(u->freq % 1000); // Fine tune
+  }
 }
 
 uint8_t doAbout(int16_t enc)
@@ -841,6 +889,73 @@ static void doMenu(int16_t enc)
   menuIdx = wrap_range(menuIdx, enc, 0, LAST_ITEM(menu));
 }
 
+static void clickUtility()
+{
+   // Apply selection and exit
+   const UtilFreq* u = getUtilData(utilIdx);
+   uint32_t freqHz = u->freq;
+   uint8_t mode = u->mode;
+   
+   // Find appropriate band
+   int newBandIdx = 0; 
+   bool found = false;
+   
+   uint16_t targetFreq = freqFromHz(freqHz, mode);
+   
+   for(int i=0; i<getTotalBands(); i++) {
+       if (bands[i].bandMode == mode && 
+           targetFreq >= bands[i].minimumFreq && 
+           targetFreq <= bands[i].maximumFreq) {
+           newBandIdx = i;
+           found = true;
+           break;
+       }
+   }
+   
+   if (!found) {
+       for(int i=0; i<getTotalBands(); i++) {
+           bool isVHF = (bands[i].bandType == FM_BAND_TYPE);
+           bool targetIsVHF = (mode == FM);
+           
+           if (isVHF == targetIsVHF &&
+               targetFreq >= bands[i].minimumFreq && 
+               targetFreq <= bands[i].maximumFreq) {
+               newBandIdx = i;
+               found = true;
+               break;
+           }
+       }
+   }
+   
+   if (!found) {
+       for(int i=0; i<getTotalBands(); i++) {
+           if (strstr(bands[i].bandName, "ALL") || strstr(bands[i].bandName, "WIDE")) {
+               newBandIdx = i;
+               break;
+           }
+       }
+   }
+
+   currentCmd = CMD_NONE;
+   
+   // Set Global State
+   bandIdx = newBandIdx;
+   currentMode = mode;
+   currentFrequency = targetFreq;
+   currentBFO = bfoFromHz(freqHz);
+   
+   // Save to Band structure
+   bands[bandIdx].currentFreq = currentFrequency;
+   bands[bandIdx].bandMode = mode;
+   
+   // Apply
+   selectBand(bandIdx, true);
+   
+   if (isSSB() && currentBFO != 0) {
+       updateBFO(currentBFO);
+   }
+}
+
 static void clickMenu(int cmd, bool shortPress)
 {
   // No command yet
@@ -867,9 +982,22 @@ static void clickMenu(int cmd, bool shortPress)
       break;
 
     case MENU_SOFTMUTE:
-      // No soft mute in FM mode
       if(currentMode!=FM) currentCmd = CMD_SOFTMUTE;
       break;
+
+    case MENU_BEACON:
+       toggleBeaconMode();
+       currentCmd = CMD_NONE;
+       break;
+       
+    case MENU_PROPAG:
+       currentCmd = CMD_PROPAG;
+       break;
+       
+    case MENU_UTILITY:
+       currentCmd = CMD_UTILITY;
+       doUtility(0);
+       break;
 
     case MENU_AVC:
       // No AVC in FM mode
@@ -959,6 +1087,8 @@ bool doSideBar(uint16_t cmd, int16_t enc, int16_t enca)
     case CMD_UTCOFFSET:  doUTCOffset(scrollDirection * enc);break;
     case CMD_SQUELCH:    doSquelch(enca);break;
     case CMD_ABOUT:      doAbout(enc);break;
+    case CMD_PROPAG:     /* nothing to scroll, but allow exit */ break;
+    case CMD_UTILITY:    doUtility(enc);break;
     default:             return(false);
   }
 
@@ -978,6 +1108,7 @@ bool clickHandler(uint16_t cmd, bool shortPress)
     case CMD_SQUELCH:  clickSquelch(shortPress);break;
     case CMD_SEEK:     clickSeek(shortPress);break;
     case CMD_SCAN:     clickScan(shortPress);break;
+    case CMD_UTILITY:  clickUtility();break;
     case CMD_FREQ:     return(clickFreq(shortPress));
     default:           return(false);
   }
