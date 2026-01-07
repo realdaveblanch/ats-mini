@@ -145,19 +145,19 @@ void drawPropagation() {
         if (localHour >= 6 && localHour < 9) {
             phase = "Morning / Greyline";
             bestBands = "20m, 30m, 40m";
-            iconColor = 0xFFE0; // Yellow
+            iconColor = TH.batt_icon; // Yellow-ish
         } else if (localHour >= 9 && localHour < 16) {
             phase = "Daytime";
             bestBands = "10m - 20m";
-            iconColor = 0xF800; // Red
+            iconColor = TH.text_warn; // Red-ish
         } else if (localHour >= 16 && localHour < 19) {
             phase = "Evening / Greyline";
             bestBands = "20m - 60m";
-            iconColor = 0xFDA0; // Orange
+            iconColor = TH.scale_line; // Orange-ish
         } else {
             phase = "Night Time";
             bestBands = "40m - 160m";
-            iconColor = 0x001F; // Blue
+            iconColor = TH.menu_param; // Cyan-ish
         }
         
         spr.setTextColor(iconColor);
@@ -204,9 +204,9 @@ void drawPropagation() {
     spr.drawString("80m:", 240, y, 2);
     
     auto getColor = [](const char* r) {
-        if (strcmp(r, "Good") == 0) return (uint16_t)0x07E0;
-        if (strcmp(r, "Fair") == 0) return (uint16_t)0xFFE0;
-        return (uint16_t)0xF800;
+        if (strcmp(r, "Good") == 0) return TH.batt_full;
+        if (strcmp(r, "Fair") == 0) return TH.batt_icon;
+        return TH.text_warn;
     };
     
     spr.setTextColor(getColor(propData.rating10m));
